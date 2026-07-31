@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#102d25">
+  <title>Ribbit Recall — A Frog Matching Game</title>
+  <!--
+    Ribbit Recall — single-file, offline frog matching game.
+    Assumptions: a 4×4 board is the best balance of readable cards and satisfying play on iPhone.
+    Frog portraits are stylized, species-inspired illustrations rather than field-guide depictions.
+    Balance values live together near the top of the script for easy hand editing.
+  -->
+  <style>
+    :root{
+      color-scheme:dark;--ink:#f6ffdf;--muted:#b9d5bf;--pond:#102d25;--pond2:#071b1d;
+      --lime:#c8f36a;--sun:#ffd66b;--pink:#ff7998;--card:#17463b;--gap:clamp(6px,1.7vw,10px)
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;min-height:100%;overscroll-behavior:none;background:var(--pond2);font-family:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,sans-serif}
+    body{min-height:100svh;color:var(--ink);overflow-x:hidden;background:
+      radial-gradient(circle at 18% 12%,#2a654d 0 1px,transparent 2px),
+      radial-gradient(circle at 80% 35%,#36765b 0 1px,transparent 2px),
+      linear-gradient(160deg,#153e31,#071a1d 72%);background-size:27px 27px,33px 33px,auto}
+    body:before,body:after{content:"";position:fixed;border-radius:50%;border:1px solid #8fe29b22;pointer-events:none}
+    body:before{width:38vmax;height:38vmax;left:-23vmax;top:18vh;box-shadow:0 0 0 28px #8fe29b0a,0 0 0 65px #8fe29b06}
+    body:after{width:32vmax;height:32vmax;right:-20vmax;bottom:5vh;box-shadow:0 0 0 35px #8fe29b09}
+    button{font:inherit;color:inherit}
+    #app{position:relative;z-index:2;width:min(100%,620px);min-height:100svh;margin:auto;padding:max(10px,env(safe-area-inset-top)) clamp(10px,3vw,20px) max(10px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px}
+    header{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .brand{display:flex;align-items:center;gap:9px;min-width:0}
+    .logo{width:42px;height:42px;display:grid;place-items:center;border-radius:50% 50% 45% 45%;background:#c8f36a;color:#17352b;font-size:25px;box-shadow:0 5px 0 #729b3c,0 8px 18px #0005;transform:rotate(-4deg)}
+    h1{font-size:clamp(21px,6vw,31px);line-height:.9;margin:0;letter-spacing:-1px;text-shadow:0 3px 0 #071b1d}
+    .tag{display:block;color:var(--lime);font-size:10px;line-height:1.5;letter-spacing:2.1px;text-transform:uppercase}
+    .icon-btn{width:42px;height:42px;border:1px solid #a7d99b44;background:#0c2725cc;border-radius:14px;display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 1px #ffffff1c,0 4px 10px #0003}
+    .icon-btn:active{transform:translateY(2px)}
+    .stats{width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .stat{padding:5px 4px 6px;border:1px solid #b6e7a727;background:#0b2623aa;border-radius:12px;text-align:center;box-shadow:inset 0 1px #fff0}
+    .stat b{display:block;color:var(--sun);font-size:clamp(16px,4.6vw,22px);font-variant-numeric:tabular-nums;line-height:1}
+    .stat span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1.2px;margin-top:3px}
+    #board-wrap{position:relative;width:min(94vw,53svh,500px);max-width:100%;margin:auto 0}
+    #board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap);padding:var(--gap);border-radius:clamp(18px,5vw,30px);background:#071d1dcc;border:1px solid #bcf69f35;box-shadow:inset 0 0 30px #0008,0 18px 50px #0005;perspective:900px;transition:filter .2s,transform .2s}
+    #board.paused{filter:blur(8px) brightness(.65)}
+    .card{position:relative;min-width:0;min-height:0;border:0;padding:0;background:transparent;border-radius:clamp(11px,3vw,19px);cursor:pointer;perspective:700px;outline:none}
+    .card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .42s cubic-bezier(.2,.78,.24,1.18);border-radius:inherit}
+    .card.flipped .card-inner,.card.matched .card-inner{transform:rotateY(180deg)}
+    .face{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;backface-visibility:hidden;-webkit-backface-visibility:hidden;overflow:hidden}
+    .back{background:
+      radial-gradient(circle at 33% 31%,#daff86 0 3%,transparent 4%),
+      radial-gradient(circle at 68% 62%,#95d456 0 3%,transparent 4%),
+      linear-gradient(145deg,#315e35,#183d32);border:2px solid #80b958;box-shadow:inset 0 0 0 3px #153a2e,inset 0 0 18px #0006,0 5px 8px #0004}
+    .back:before{content:"?";display:grid;place-items:center;width:48%;aspect-ratio:1;border-radius:50% 48% 45% 52%;background:#c8f36a;color:#22452f;font-size:clamp(24px,8vw,52px);font-weight:1000;box-shadow:0 4px 0 #719941;transform:rotate(-6deg)}
+    .front{transform:rotateY(180deg);padding:3px;background:linear-gradient(150deg,#fffbe2,#c7eebc);border:2px solid #ecffd6;box-shadow:inset 0 -8px 18px #528c5a2c,0 5px 10px #0005}
+    .front svg{width:96%;height:96%;filter:drop-shadow(0 4px 2px #17332d45)}
+    .card:focus-visible{box-shadow:0 0 0 3px #fff,0 0 0 7px #ffd66b;border-radius:18px;z-index:2}
+    .card.matched{cursor:default}
+    .card.matched .front{border-color:var(--sun);box-shadow:0 0 0 2px #e7b836,0 0 20px #ffe26988,inset 0 -8px 18px #528c5a2c}
+    .card.pulse{animation:pulse .52s ease}
+    .card.wrong{animation:wobble .36s ease}
+    .shake{animation:shake .26s ease}
+    .hitstop{filter:brightness(1.55)!important}
+    @keyframes pulse{35%{transform:scale(1.09)}65%{transform:scale(.95)}100%{transform:scale(1)}}
+    @keyframes wobble{25%{transform:translateX(-3px) rotate(-2deg)}60%{transform:translateX(3px) rotate(2deg)}}
+    @keyframes shake{25%{transform:translate(3px,-1px)}50%{transform:translate(-3px,2px)}75%{transform:translate(2px,1px)}}
+    #status{height:18px;margin:0;color:var(--muted);font-size:12px;text-align:center;letter-spacing:.2px}
+    .controls{width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+    .control{border:1px solid #a7d99b38;background:#12342ee8;border-radius:13px;min-height:42px;padding:7px 3px;cursor:pointer;font-size:clamp(10px,2.8vw,13px);font-weight:800;box-shadow:inset 0 1px #ffffff1e,0 4px 8px #0003}
+    .control:active{transform:translateY(2px);box-shadow:inset 0 1px #ffffff1e,0 1px 3px #0004}
+    #fx{position:fixed;inset:0;z-index:8;width:100%;height:100%;pointer-events:none}
+    .overlay{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:#03130fd9;backdrop-filter:blur(5px);opacity:0;visibility:hidden;transition:opacity .22s,visibility .22s}
+    .overlay.show{opacity:1;visibility:visible}
+    .panel{position:relative;width:min(92vw,430px);max-height:86svh;overflow:auto;border-radius:28px;padding:24px;background:linear-gradient(155deg,#f6ffe7,#c9edb2);color:#15362b;text-align:center;box-shadow:0 20px 80px #000b,0 0 0 2px #fff8;transform:translateY(18px) scale(.94);transition:transform .34s cubic-bezier(.2,.9,.25,1.2)}
+    .show .panel{transform:none}
+    .panel h2{font-size:clamp(27px,8vw,41px);margin:4px 0 8px;line-height:1;color:#153c2d;letter-spacing:-1.5px}
+    .panel p{font-family:system-ui,sans-serif;line-height:1.5;margin:10px 0;color:#294e3f}
+    .frog-big{width:150px;height:120px;margin:-10px auto 0}
+    .frog-big svg{width:100%;height:100%;filter:drop-shadow(0 7px 4px #28543844)}
+    .species{display:inline-block;padding:4px 10px;background:#173b2d;color:#eaffbd;border-radius:999px;text-transform:uppercase;letter-spacing:1.3px;font-size:10px;font-weight:900}
+    .primary,.secondary{width:100%;border:0;border-radius:15px;padding:13px 16px;margin-top:10px;font-weight:950;cursor:pointer}
+    .primary{background:#173c2d;color:white;box-shadow:0 5px 0 #09221a}
+    .secondary{background:#a9d77f;color:#183c2e}
+    .primary:active,.secondary:active{transform:translateY(3px)}
+    .source{font-size:10px!important;color:#537464!important}
+    .source a{color:#305d49}
+    .win-medal{font-size:76px;line-height:1;animation:pulse 1.2s infinite}
+    .win-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:15px 0}
+    .win-grid div{background:#204b3715;padding:10px 4px;border-radius:12px;font-size:11px;text-transform:uppercase}
+    .win-grid b{display:block;font-size:21px;color:#1e5139}
+    .help{text-align:left;font-size:14px}.help h2{text-align:center}.help ul{padding-left:21px;line-height:1.55}.help small{display:block;color:#527164;line-height:1.45}.help a{color:#285b45}
+    .toast{position:fixed;z-index:9;left:50%;top:max(12px,env(safe-area-inset-top));transform:translate(-50%,-80px);opacity:0;background:#fff7ca;color:#24432e;border-radius:999px;padding:8px 15px;font-weight:900;box-shadow:0 6px 20px #0008;transition:.3s}
+    .toast.show{transform:translate(-50%,0);opacity:1}
+    @media(max-height:670px){#app{gap:4px;padding-top:max(5px,env(safe-area-inset-top))}.logo{width:34px;height:34px;font-size:21px}h1{font-size:22px}.stats{gap:4px}.stat{padding:3px}.stat b{font-size:16px}#board-wrap{width:min(91vw,50svh,430px)}.control{min-height:36px;padding:4px}.tag{display:none}}
+    @media(min-width:700px) and (orientation:landscape){#app{min-height:100vh;display:grid;grid-template-columns:1fr min(62vh,500px);grid-template-rows:auto auto 1fr auto;column-gap:22px}header,.stats,#status,.controls{grid-column:1}#board-wrap{grid-column:2;grid-row:1/5;width:min(62vh,500px)}.controls{align-self:end}#status{align-self:end}}
+    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}.win-medal{animation:none}}
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header>
+      <div class="brand"><div class="logo" aria-hidden="true">🐸</div><div><h1>Ribbit Recall</h1><span class="tag">Find your frog friends</span></div></div>
+      <button class="icon-btn" id="helpBtn" aria-label="How to play">?</button>
+    </header>
+    <section class="stats" aria-label="Game statistics">
+      <div class="stat"><b id="pairs">0/8</b><span>Pairs</span></div>
+      <div class="stat"><b id="moves">0</b><span>Moves</span></div>
+      <div class="stat"><b id="timer">0:00</b><span>Time</span></div>
+      <div class="stat"><b id="streak">—</b><span>Streak</span></div>
+    </section>
+    <div id="board-wrap"><div id="board" role="grid" aria-label="Four by four frog matching board"></div></div>
+    <p id="status" aria-live="polite">Pick a lily pad to begin!</p>
+    <nav class="controls" aria-label="Game controls">
+      <button class="control" id="restartBtn">↻ Restart</button>
+      <button class="control" id="pauseBtn">Ⅱ Pause</button>
+      <button class="control" id="muteBtn">♪ Sound</button>
+      <button class="control" id="bestBtn">★ Best</button>
+    </nav>
+  </main>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div class="toast" id="toast" role="status"></div>
+
+  <section class="overlay" id="factModal" role="dialog" aria-modal="true" aria-labelledby="factTitle">
+    <div class="panel"><div class="frog-big" id="factFrog"></div><span class="species" id="factSpecies"></span><h2 id="factTitle">Frog found!</h2><p id="factText"></p><p class="source" id="factSource"></p><button class="primary" id="factContinue">Keep hopping →</button></div>
+  </section>
+  <section class="overlay" id="winModal" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+    <div class="panel"><div class="win-medal">🏆</div><h2 id="winTitle">Toad-ally brilliant!</h2><p>You reunited every frog in the pond.</p><div class="win-grid"><div><b id="winMoves">0</b>moves</div><div><b id="winTime">0:00</b>time</div><div><b id="winBest">★</b>result</div></div><button class="primary" id="playAgain">Hop again</button></div>
+  </section>
+  <section class="overlay" id="pauseModal" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+    <div class="panel"><div class="win-medal">🌿</div><h2 id="pauseTitle">Pond paused</h2><p>The frogs will wait right here.</p><button class="primary" id="resumeBtn">Resume game</button></div>
+  </section>
+  <section class="overlay" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="panel help"><h2 id="helpTitle">How to hop</h2><ul><li>Flip two lily pads. Matching frogs stay face-up.</li><li>Each new pair reveals a sourced frog fact.</li><li>Keyboard: arrows move, Enter/Space flips, P pauses, R restarts, M mutes.</li><li>Gamepad: D-pad/stick moves, A flips, Start pauses, Y restarts.</li></ul><small>Portraits are playful, species-inspired art. Facts are condensed from the <a href="https://www.nps.gov/gaar/learn/nature/wood-frog-page-2.htm" target="_blank" rel="noopener">U.S. National Park Service</a>, <a href="https://nationalzoo.si.edu/animals/news/happy-amphibian-week-2025" target="_blank" rel="noopener">Smithsonian's National Zoo</a>, <a href="https://www.amnh.org/explore/ology/ology-cards/122-goliath-frog" target="_blank" rel="noopener">AMNH</a>, and <a href="https://animaldiversity.org/accounts/Centrolenidae/" target="_blank" rel="noopener">Animal Diversity Web</a>.</small><button class="primary" id="helpClose">Back to the pond</button></div>
+  </section>
+
+  <script>
+  (()=>{'use strict';
+    // ---- Easy-to-edit balance values ----
+    const BALANCE={columns:4,pairs:8,mismatchDelay:760,matchRevealDelay:470,particleCount:22};
+    const STORE='ribbitRecall.v1';
+    const FROGS=[
+      {id:'wood',name:'Wood Frog',body:'#b77a55',belly:'#e4c09c',eye:'#241a18',mark:'#493027',pattern:'mask',fact:'Wood frogs can spend winter frozen without breathing or a heartbeat. Glucose made by the liver helps protect their cells until spring.',source:'U.S. National Park Service',url:'https://www.nps.gov/gaar/learn/nature/wood-frog-page-2.htm'},
+      {id:'gold',name:'Golden Poison Frog',body:'#ffd525',belly:'#fff081',eye:'#171a18',mark:'#f18a18',pattern:'dots',fact:'Golden poison frogs get their toxicity from something in their wild diet. Captive frogs fed toxin-free insects are harmless.',source:'American Museum of Natural History',url:'https://www.amnh.org/explore/ology/ology-cards/352-golden-poison-frog'},
+      {id:'clawed',name:'African Clawed Frog',body:'#788b77',belly:'#c7cfb6',eye:'#17231f',mark:'#3f514a',pattern:'stitch',fact:'African clawed frogs have no tongue or visible external ears. They use their small front limbs to push food into their mouths.',source:"Smithsonian's National Zoo",url:'https://nationalzoo.si.edu/animals/african-clawed-frog'},
+      {id:'goliath',name:'Goliath Frog',body:'#467c43',belly:'#a2bd72',eye:'#241b12',mark:'#23452c',pattern:'stripe',fact:"The Goliath frog is the world's largest frog. It also lacks a vocal sac, so this giant does not make the usual frog croak.",source:'American Museum of Natural History',url:'https://www.amnh.org/explore/ology/ology-cards/122-goliath-frog'},
+      {id:'glass',name:'Glass Frog',body:'#79d891',belly:'#d9f6be',eye:'#312b1d',mark:'#ecfff0',pattern:'glass',fact:'Glass frogs are named for the transparent skin on their bellies—on some species, you can see their internal organs through it.',source:'Animal Diversity Web, University of Michigan',url:'https://animaldiversity.org/accounts/Centrolenidae/'},
+      {id:'milk',name:'Amazon Milk Frog',body:'#a6c5bc',belly:'#f0ede2',eye:'#1a1a19',mark:'#3e5e60',pattern:'bands',fact:'Amazon milk frogs get their name from a sticky white defensive secretion. Their grippy toe pads can hold many times their body weight.',source:"Smithsonian's National Zoo",url:'https://nationalzoo.si.edu/animals/news/fun-facts-about-amazon-milk-frogs'},
+      {id:'moss',name:'Vietnamese Mossy Frog',body:'#527a51',belly:'#829e66',eye:'#21190e',mark:'#243c2d',pattern:'moss',fact:'Vietnamese mossy frogs resemble clumps of moss. When frightened, they can curl into a ball and drop into the water below.',source:"Smithsonian's National Zoo",url:'https://nationalzoo.si.edu/animals/news/happy-amphibian-week-2025'},
+      {id:'red',name:'Red-eyed Tree Frog',body:'#54b95d',belly:'#bdf08b',eye:'#e52f35',mark:'#287fd0',pattern:'sides',fact:'Red-eyed tree frogs are nocturnal. Their adhesive toe pads help them climb leaves and branches while the rainforest sleeps.',source:"Smithsonian's National Zoo",url:'https://nationalzoo.si.edu/animals/news/new-zoo-red-eyed-tree-frogs'}
+    ];
+    const $=s=>document.querySelector(s), board=$('#board'), fx=$('#fx'), ctx=fx.getContext('2d');
+    const ui={pairs:$('#pairs'),moves:$('#moves'),timer:$('#timer'),streak:$('#streak'),status:$('#status'),toast:$('#toast')};
+    let cards=[],first=null,second=null,lock=false,matched=0,moves=0,streak=0,elapsed=0,started=false,paused=false,lastStamp=performance.now(),particles=[],pendingWin=false,focusIndex=0;
+    let saved={},muted=false,audio=null,noiseBuffer=null,lastPad={};
+    try{saved=JSON.parse(localStorage.getItem(STORE)||'{}');muted=!!saved.muted}catch(_){saved={}}
+
+    function frogSVG(f,size='card'){
+      const p={
+        mask:`<path d="M21 35 Q38 21 54 34M66 34 Q82 21 99 35" fill="none" stroke="${f.mark}" stroke-width="10" stroke-linecap="round"/>`,
+        dots:`<g fill="${f.mark}"><circle cx="42" cy="58" r="4"/><circle cx="75" cy="48" r="3"/><circle cx="66" cy="73" r="4"/><circle cx="89" cy="66" r="2.6"/></g>`,
+        stitch:`<g stroke="${f.mark}" stroke-width="2"><path d="M30 52h9m-4-4v9M78 57h9m-4-4v9M55 71h9m-4-4v9"/></g>`,
+        stripe:`<path d="M32 52 Q60 35 90 52M35 65 Q60 51 86 65" fill="none" stroke="${f.mark}" stroke-width="6" stroke-linecap="round" opacity=".7"/>`,
+        glass:`<ellipse cx="60" cy="62" rx="25" ry="21" fill="${f.mark}" opacity=".52"/><path d="M51 61c7-9 14 9 20 0" fill="none" stroke="#d9697e" stroke-width="3" opacity=".65"/>`,
+        bands:`<g fill="none" stroke="${f.mark}" stroke-width="7" opacity=".88"><path d="M30 47q30 23 60 0M30 68q30 20 60 0"/></g>`,
+        moss:`<g fill="${f.mark}" opacity=".8"><circle cx="35" cy="50" r="8"/><circle cx="52" cy="43" r="7"/><circle cx="79" cy="50" r="9"/><circle cx="65" cy="70" r="8"/></g>`,
+        sides:`<path d="M25 49q9 9 13 29M95 49q-9 9-13 29" fill="none" stroke="${f.mark}" stroke-width="9" stroke-linecap="round"/>`
+      }[f.pattern]||'';
+      return `<svg viewBox="0 0 120 120" role="img" aria-label="Stylized ${f.name}">
+        <ellipse cx="25" cy="83" rx="20" ry="10" fill="${f.body}" transform="rotate(-24 25 83)"/><ellipse cx="95" cy="83" rx="20" ry="10" fill="${f.body}" transform="rotate(24 95 83)"/>
+        <ellipse cx="60" cy="66" rx="39" ry="32" fill="${f.body}"/><ellipse cx="60" cy="75" rx="24" ry="18" fill="${f.belly}" opacity=".82"/>${p}
+        <circle cx="37" cy="33" r="15" fill="${f.body}"/><circle cx="83" cy="33" r="15" fill="${f.body}"/>
+        <circle cx="37" cy="31" r="9" fill="#f5f4d6"/><circle cx="83" cy="31" r="9" fill="#f5f4d6"/><circle cx="37" cy="31" r="5.5" fill="${f.eye}"/><circle cx="83" cy="31" r="5.5" fill="${f.eye}"/><circle cx="35" cy="29" r="1.8" fill="white"/><circle cx="81" cy="29" r="1.8" fill="white"/>
+        <path d="M50 83q10 8 20 0" fill="none" stroke="#24402e" stroke-width="2.5" stroke-linecap="round"/><circle cx="47" cy="73" r="2" fill="#29402e"/><circle cx="73" cy="73" r="2" fill="#29402e"/>
+        <text x="60" y="112" text-anchor="middle" fill="#17352b" font-family="system-ui,sans-serif" font-size="${size==='big'?8.5:7.5}" font-weight="900">${f.name.toUpperCase()}</text>
+      </svg>`;
+    }
+    function shuffle(a){for(let i=a.length-1;i>0;i--){const r=new Uint32Array(1);crypto.getRandomValues(r);const j=r[0]%(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+    function startGame(){closeAll();cards=shuffle(FROGS.flatMap(f=>[{frog:f},{frog:f}]));first=second=null;lock=false;matched=moves=streak=elapsed=0;started=paused=pendingWin=false;focusIndex=0;particles=[];board.innerHTML='';
+      cards.forEach((c,i)=>{c.matched=false;const b=document.createElement('button');b.className='card';b.dataset.index=i;b.setAttribute('role','gridcell');b.setAttribute('aria-label',`Hidden card ${i+1}`);b.tabIndex=i===0?0:-1;b.innerHTML=`<span class="card-inner"><span class="face back"></span><span class="face front">${frogSVG(c.frog)}</span></span>`;b.addEventListener('click',()=>flip(i));board.appendChild(b);c.el=b});
+      board.classList.remove('paused');updateUI();ui.status.textContent='Pick a lily pad to begin!';lastStamp=performance.now();sound('start');
+    }
+    function flip(i){if(paused||lock||cards[i].matched||cards[i]===first)return;ensureAudio();if(!started){started=true;lastStamp=performance.now()}const c=cards[i];c.el.classList.add('flipped');c.el.setAttribute('aria-label',c.frog.name);sound('flip');focusIndex=i;setFocus(i,false);
+      if(!first){first=c;ui.status.textContent='Now find its twin…';return}second=c;moves++;updateUI();lock=true;
+      if(first.frog.id===second.frog.id)setTimeout(resolveMatch,BALANCE.matchRevealDelay);else setTimeout(resolveMiss,BALANCE.mismatchDelay);
+    }
+    function resolveMatch(){first.matched=second.matched=true;first.el.classList.add('matched','pulse');second.el.classList.add('matched','pulse');first.el.setAttribute('aria-label',`${first.frog.name}, matched`);second.el.setAttribute('aria-label',`${second.frog.name}, matched`);matched++;streak++;hitStop();shake(2);burst(first.el,first.frog.body);burst(second.el,second.frog.body);sound('match');pendingWin=matched===BALANCE.pairs;const f=first.frog;first=second=null;lock=false;updateUI();showFact(f)}
+    function resolveMiss(){first.el.classList.add('wrong');second.el.classList.add('wrong');shake(3);sound('miss');setTimeout(()=>{first.el.classList.remove('flipped','wrong');second.el.classList.remove('flipped','wrong');first.el.setAttribute('aria-label','Hidden card');second.el.setAttribute('aria-label','Hidden card');first=second=null;lock=false;streak=0;updateUI();ui.status.textContent='Not a match—keep hopping!'},260)}
+    function showFact(f){$('#factFrog').innerHTML=frogSVG(f,'big');$('#factSpecies').textContent=f.name;$('#factText').textContent=f.fact;$('#factSource').innerHTML=`Source: <a href="${f.url}" target="_blank" rel="noopener">${f.source}</a>`;$('#factTitle').textContent=matched===1?'First frog found!':streak>1?`${streak} in a row!`:'Frog found!';showModal('#factModal');ui.status.textContent=`${f.name} reunited!`;}
+    function closeFact(){hideModal('#factModal');if(pendingWin){pendingWin=false;setTimeout(win,250)}else{ui.status.textContent=`${matched} of ${BALANCE.pairs} pairs reunited`}}
+    function win(){started=false;const time=Math.round(elapsed);let isBest=false;if(!saved.bestMoves||moves<saved.bestMoves||(moves===saved.bestMoves&&time<saved.bestTime)){saved.bestMoves=moves;saved.bestTime=time;isBest=true;persist()}$('#winMoves').textContent=moves;$('#winTime').textContent=formatTime(time);$('#winBest').textContent=isBest?'NEW!':'★';showModal('#winModal');sound('win');shake(3);confetti();}
+    function updateUI(){ui.pairs.textContent=`${matched}/${BALANCE.pairs}`;ui.moves.textContent=moves;ui.streak.textContent=streak>1?`×${streak}`:'—';ui.timer.textContent=formatTime(elapsed)}
+    function formatTime(s){s=Math.max(0,Math.floor(s));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}
+    function persist(){try{saved.muted=muted;localStorage.setItem(STORE,JSON.stringify(saved))}catch(_){}}
+    function showBest(){const msg=saved.bestMoves?`Best pond: ${saved.bestMoves} moves in ${formatTime(saved.bestTime)}`:'Finish a pond to set your first best!';toast(msg)}
+    function toast(t){ui.toast.textContent=t;ui.toast.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>ui.toast.classList.remove('show'),2500)}
+    function showModal(sel){document.querySelector(sel).classList.add('show');setTimeout(()=>document.querySelector(sel+' button').focus(),50)}
+    function hideModal(sel){document.querySelector(sel).classList.remove('show');cards[focusIndex]?.el.focus({preventScroll:true})}
+    function closeAll(){document.querySelectorAll('.overlay').forEach(x=>x.classList.remove('show'))}
+    function togglePause(force){if(document.querySelector('.overlay.show:not(#pauseModal)'))return;paused=force===undefined?!paused:force;board.classList.toggle('paused',paused);if(paused)showModal('#pauseModal');else hideModal('#pauseModal');$('#pauseBtn').textContent=paused?'▶ Resume':'Ⅱ Pause';sound('button');lastStamp=performance.now()}
+    function openHelp(){if(paused)return;showModal('#helpModal');sound('button')}
+    function setFocus(i,actual=true){focusIndex=(i+cards.length)%cards.length;cards.forEach((c,n)=>c.el.tabIndex=n===focusIndex?0:-1);if(actual)cards[focusIndex].el.focus({preventScroll:true})}
+    function moveFocus(dx,dy){const row=Math.floor(focusIndex/BALANCE.columns),col=focusIndex%BALANCE.columns;setFocus(((row+dy+BALANCE.columns)%BALANCE.columns)*BALANCE.columns+(col+dx+BALANCE.columns)%BALANCE.columns);sound('move')}
+
+    // Procedural Web Audio feedback; initialized only after a user gesture.
+    function ensureAudio(){if(audio){if(audio.state==='suspended')audio.resume();return}audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();noiseBuffer=audio.createBuffer(1,audio.sampleRate*.12,audio.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
+    function tone(freq,dur=.08,type='sine',gain=.055,delay=0){if(muted||!audio)return;const t=audio.currentTime+delay,o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(gain,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+dur+.02)}
+    function sound(kind){if(muted)return;if(!audio&&['start'].includes(kind))return;if(!audio)return;({flip:()=>tone(330,.06,'triangle'),move:()=>tone(180,.035,'sine',.018),button:()=>tone(245,.05,'triangle',.035),match:()=>{tone(440,.11,'sine');tone(660,.14,'sine',.05,.08);tone(880,.16,'triangle',.04,.17)},miss:()=>{tone(145,.13,'sawtooth',.025);noise(.07,.022)},win:()=>[523,659,784,1047].forEach((n,i)=>tone(n,.24,'triangle',.06,i*.12)),start:()=>tone(300,.05)}[kind]||(()=>{}))()}
+    function noise(dur,gain){if(muted||!audio||!noiseBuffer)return;const s=audio.createBufferSource(),g=audio.createGain(),t=audio.currentTime;s.buffer=noiseBuffer;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);s.connect(g).connect(audio.destination);s.start();s.stop(t+dur)}
+    function toggleMute(){ensureAudio();muted=!muted;$('#muteBtn').textContent=muted?'× Muted':'♪ Sound';persist();if(!muted)sound('button')}
+
+    // Particle canvas and semi-fixed rAF game loop.
+    function resizeFX(){const d=Math.min(devicePixelRatio||1,2);fx.width=innerWidth*d;fx.height=innerHeight*d;fx.style.width=innerWidth+'px';fx.style.height=innerHeight+'px';ctx.setTransform(d,0,0,d,0,0)}
+    function burst(el,color){const r=el.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;for(let i=0;i<BALANCE.particleCount;i++){const a=Math.random()*Math.PI*2,s=50+Math.random()*150;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-50,life:.55+Math.random()*.35,max:.9,color,kind:Math.random()>.35?'dot':'leaf'})}}
+    function confetti(){const colors=['#c8f36a','#ffd66b','#ff7998','#75d8ff','#fff'];for(let i=0;i<140;i++)particles.push({x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight*.4,vx:(Math.random()-.5)*130,vy:80+Math.random()*180,life:2+Math.random()*1.8,max:3.8,color:colors[i%colors.length],kind:'leaf'})}
+    function step(dt){particles.forEach(p=>{p.life-=dt;p.vy+=270*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.995});particles=particles.filter(p=>p.life>0&&p.y<innerHeight+40)}
+    function draw(){ctx.clearRect(0,0,innerWidth,innerHeight);particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.x*.02);if(p.kind==='leaf'){ctx.beginPath();ctx.ellipse(0,0,6,3,0,0,Math.PI*2);ctx.fill()}else{ctx.beginPath();ctx.arc(0,0,3.5,0,Math.PI*2);ctx.fill()}ctx.restore()});ctx.globalAlpha=1}
+    let accumulator=0,lastTimerPaint=0;
+    function loop(now){const frame=Math.min(.05,(now-lastStamp)/1000);lastStamp=now;if(started&&!paused&&!document.querySelector('.overlay.show'))elapsed+=frame;accumulator+=frame;while(accumulator>=1/60){step(1/60);accumulator-=1/60}if(now-lastTimerPaint>200){ui.timer.textContent=formatTime(elapsed);lastTimerPaint=now}draw();pollGamepad(now);requestAnimationFrame(loop)}
+    function shake(px){document.body.style.setProperty('--shake',px+'px');board.classList.remove('shake');void board.offsetWidth;board.classList.add('shake')}
+    function hitStop(){board.classList.add('hitstop');setTimeout(()=>board.classList.remove('hitstop'),75)}
+
+    // Unified keyboard + gamepad actions. Pointer/touch uses the same flip() path via card clicks.
+    document.addEventListener('keydown',e=>{if(e.repeat)return;const modal=document.querySelector('.overlay.show');if(e.key==='m'||e.key==='M'){toggleMute();return}if(e.key==='r'||e.key==='R'){startGame();return}if(e.key==='p'||e.key==='P'){if(!modal||modal.id==='pauseModal')togglePause();return}if(modal){if(e.key==='Escape'){if(modal.id==='factModal')closeFact();else if(modal.id==='pauseModal')togglePause(false);else hideModal('#'+modal.id)}return}const map={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};if(map[e.key]){e.preventDefault();moveFocus(...map[e.key])}else if(e.key==='Enter'||e.key===' '){e.preventDefault();flip(focusIndex)}});
+    function edgeButton(g,i,key,fn){const down=!!g.buttons[i]?.pressed;if(down&&!lastPad[key])fn();lastPad[key]=down}
+    let padMoveAt=0;
+    function pollGamepad(now){const g=navigator.getGamepads?.()[0];if(!g)return;edgeButton(g,0,'a',()=>{if(!document.querySelector('.overlay.show'))flip(focusIndex)});edgeButton(g,9,'start',()=>togglePause());edgeButton(g,3,'y',startGame);const x=g.axes[0]||0,y=g.axes[1]||0;let dx=(g.buttons[15]?.pressed||x>.55)?1:(g.buttons[14]?.pressed||x<-.55)?-1:0,dy=(g.buttons[13]?.pressed||y>.55)?1:(g.buttons[12]?.pressed||y<-.55)?-1:0;if((dx||dy)&&now>padMoveAt){moveFocus(dx,dy);padMoveAt=now+180}}
+
+    $('#restartBtn').onclick=startGame;$('#pauseBtn').onclick=()=>togglePause();$('#muteBtn').onclick=toggleMute;$('#bestBtn').onclick=showBest;$('#helpBtn').onclick=openHelp;$('#helpClose').onclick=()=>hideModal('#helpModal');$('#factContinue').onclick=closeFact;$('#resumeBtn').onclick=()=>togglePause(false);$('#playAgain').onclick=startGame;
+    window.addEventListener('resize',resizeFX,{passive:true});window.addEventListener('blur',()=>{if(started&&!paused&&!document.querySelector('.overlay.show'))togglePause(true)});
+    resizeFX();$('#muteBtn').textContent=muted?'× Muted':'♪ Sound';startGame();requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>
