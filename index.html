@@ -39,7 +39,7 @@
     .stat b{display:block;color:var(--sun);font-size:clamp(16px,4.6vw,22px);font-variant-numeric:tabular-nums;line-height:1}
     .stat span{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1.2px;margin-top:3px}
     #board-wrap{position:relative;width:min(94vw,53svh,500px);max-width:100%;margin:auto 0}
-    #board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap);padding:var(--gap);border-radius:clamp(18px,5vw,30px);background:#071d1dcc;border:1px solid #bcf69f35;box-shadow:inset 0 0 30px #0008,0 18px 50px #0005;perspective:900px;transition:filter .2s,transform .2s}
+    #board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:var(--gap);padding:var(--gap);border-radius:clamp(18px,5vw,30px);background:#071d1dcc;border:1px solid #bcf69f35;box-shadow:inset 0 0 30px #0008,0 18px 50px #0005;perspective:900px;transition:filter .2s,transform .2s}
     #board.paused{filter:blur(8px) brightness(.65)}
     .card{position:relative;min-width:0;min-height:0;border:0;padding:0;background:transparent;border-radius:clamp(11px,3vw,19px);cursor:pointer;perspective:700px;outline:none}
     .card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .42s cubic-bezier(.2,.78,.24,1.18);border-radius:inherit}
@@ -200,7 +200,16 @@
     function moveFocus(dx,dy){const row=Math.floor(focusIndex/BALANCE.columns),col=focusIndex%BALANCE.columns;setFocus(((row+dy+BALANCE.columns)%BALANCE.columns)*BALANCE.columns+(col+dx+BALANCE.columns)%BALANCE.columns);sound('move')}
 
     // Procedural Web Audio feedback; initialized only after a user gesture.
-    function ensureAudio(){if(audio){if(audio.state==='suspended')audio.resume();return}audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();noiseBuffer=audio.createBuffer(1,audio.sampleRate*.12,audio.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
+    // iOS reports 'interrupted' (calls, Siri, lock screen) as well as 'suspended', never
+    // auto-resumes, and can leave a context permanently stuck — so resume on any
+    // non-running state and rebuild the context on the next gesture if resume stalls.
+    function initAudio(){audio=new(window.AudioContext||window.webkitAudioContext)();noiseBuffer=audio.createBuffer(1,audio.sampleRate*.12,audio.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;if(audio.state!=='running')audio.resume().catch(()=>{})}
+    function dropAudio(){if(!audio)return;try{audio.close()}catch(_){}audio=null;noiseBuffer=null}
+    function ensureAudio(){if(!audio){initAudio();return}if(audio.state==='running')return;if(audio.state==='closed'){dropAudio();initAudio();return}audio.resume().catch(()=>{});clearTimeout(ensureAudio.t);ensureAudio.t=setTimeout(()=>{if(audio&&audio.state!=='running')dropAudio()},300)}
+    function resumeIfVisible(){if(!document.hidden&&audio&&audio.state!=='running')audio.resume().catch(()=>{})}
+    document.addEventListener('visibilitychange',resumeIfVisible);
+    window.addEventListener('pageshow',resumeIfVisible);
+    document.addEventListener('pointerdown',()=>{if(audio)ensureAudio()},{capture:true,passive:true});
     function tone(freq,dur=.08,type='sine',gain=.055,delay=0){if(muted||!audio)return;const t=audio.currentTime+delay,o=audio.createOscillator(),g=audio.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(gain,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+dur+.02)}
     function sound(kind){if(muted)return;if(!audio&&['start'].includes(kind))return;if(!audio)return;({flip:()=>tone(330,.06,'triangle'),move:()=>tone(180,.035,'sine',.018),button:()=>tone(245,.05,'triangle',.035),match:()=>{tone(440,.11,'sine');tone(660,.14,'sine',.05,.08);tone(880,.16,'triangle',.04,.17)},miss:()=>{tone(145,.13,'sawtooth',.025);noise(.07,.022)},win:()=>[523,659,784,1047].forEach((n,i)=>tone(n,.24,'triangle',.06,i*.12)),start:()=>tone(300,.05)}[kind]||(()=>{}))()}
     function noise(dur,gain){if(muted||!audio||!noiseBuffer)return;const s=audio.createBufferSource(),g=audio.createGain(),t=audio.currentTime;s.buffer=noiseBuffer;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);s.connect(g).connect(audio.destination);s.start();s.stop(t+dur)}
